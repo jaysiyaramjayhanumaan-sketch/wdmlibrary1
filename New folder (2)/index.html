@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seat Management with Delete Option</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+<h1>Wisdom Library</h1>
+
+
+
+<!-- Unified control buttons -->
+<div class="top-controls">
+  <div class="left-controls">
+
+   <button onclick="showNotifications()" style="margin-bottom:10px;">Show Fee Alerts</button>  
+   <button class="backup-btn">Backup</button>
+   <button class="restore-btn">Restore</button>
+<button onclick="downloadPDF()">Download PDF</button>
+  </div>
+  <div class="right-controls">
+    
+    <button id="showFilledBtn">Show Filled Seats</button>
+    <button id="showEmptyBtn">Show Empty Seats</button>
+    <button id="showAllBtn" style="display:none;">Show All Seats</button>
+
+    
+
+  </div>
+</div>
+
+  <div id="searchContainer" style="margin: 10px 0;">
+    <div class="search-controls">
+      <select id="searchType">
+        <option value="name">By Name</option>
+        <option value="seatNo">By Seat No</option>
+      </select>
+      <input id="searchInput" placeholder="Enter name" />
+      <button id="searchBtn">🔍 Search</button>
+      <button id="clearSearchBtn" style="display: none;">🔙 Back to All Seats</button>
+    </div>
+    <div id="searchResult"></div>
+  </div>
+</div>
+
+<div class="grid" id="seatGrid"></div>
+
+<div class="modal" id="editModal">
+  <div class="modal-content">
+    <h3>Edit Seat</h3>
+    <input type="text" id="editName" placeholder="Name">
+    <input type="text" id="editMobile" placeholder="Mobile">
+    <label for="editAdmissionDate">Admission Date</label>
+    <input type="date" id="editAdmissionDate">
+    <input type="number" id="editMonths" placeholder="Months">
+    <label for="editDueDate">Due Date</label>
+    <input type="date" id="editDueDate" readonly>
+    <input type="number" id="editFees" placeholder="Fees">
+    <input type="file" id="editPhoto" accept="image/*">
+    <img id="photoPreview" src="" alt="Preview" style="width: 100px; height: auto; margin-top: 10px;" />
+
+
+    <button type="button" id="removePhotoBtn"
+            style="margin-top:8px; background:#ff4d4d; color:#fff; padding:6px 10px; border:none; border-radius:6px; cursor:pointer; display:block; width:100%;">
+      ❌ Remove Photo
+    </button>
+
+    
+    <div class="button-group side-buttons">
+    <button class="edit-btn" onclick="saveSeat()">Save</button>
+    <button class="delete-btn" onclick="deleteSeat()">Delete</button>
+    <button onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+    <!-- Call & WhatsApp Buttons -->
+    <div class="edit-actions">
+      <a href="tel:" id="callBtn" class="call-btn">📞 Call</a>
+    </div>
+  </div>
+</div>
+
+<!-- jsPDF Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+<!-- Your custom JS -->
+<script src="script.js"></script>
+
+<script>
+  function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("Wisdom Library - Seat Report", doc.internal.pageSize.getWidth() / 2, 15, { align: "center" });
+
+    // Sirf filled seats ko lo
+    const rows = seats
+      .filter(s => s.name && s.name.trim() !== "")
+      .map(s => [
+        s.seatNo,
+        s.name,
+        s.mobile,
+        s.admissionDate,
+        s.dueDate,
+        s.fees
+      ]);
+
+    // Main table
+    doc.autoTable({
+      startY: 25,
+      head: [["Seat No", "Name", "Mobile", "Admission Date", "Due Date", "Fees"]],
+      body: rows,
+      theme: 'grid',
+      styles: { fontSize: 11, halign: 'center', font: "helvetica", fontStyle: "bold" },
+      headStyles: { fillColor: [0,102,204], textColor: [255,255,255], fontStyle: "bold", halign:'center' },
+      bodyStyles: { fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [240,240,240] },
+      didDrawPage: function (data) {
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height || doc.internal.pageSize.getHeight();
+        const pageWidth = pageSize.width || doc.internal.pageSize.getWidth();
+        const pageCount = doc.internal.getNumberOfPages();
+        const pageCurrent = data.pageNumber;
+
+        // Page number center bottom
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Page ${pageCurrent} of ${pageCount}`, pageWidth/2, pageHeight-5, { align: "center" });
+      }
+    });
+
+    // ✅ Totals calculate karo
+    const totalSeats = rows.length;
+    const totalFees = rows.reduce((sum, r) => sum + (parseFloat(r[5]) || 0), 0);
+
+    // ✅ Summary as table
+    doc.autoTable({
+      startY: doc.lastAutoTable.finalY + 10,  // table ke neeche
+      body: [
+        ["", "", "", "", "Total Seats Filled:", totalSeats],
+        ["", "", "", "", "Total Fees Collected:", "Rs. " + totalFees]
+      ],
+      theme: 'plain',
+      styles: { fontSize: 12, fontStyle: "bold", halign: 'right' },
+      columnStyles: {
+        4: { halign: 'right', textColor: [0, 102, 204] },
+        5: { halign: 'center', textColor: [0, 102, 204] }
+      }
+    });
+
+    // ✅ Download PDF
+   // Convert to base64 string
+const pdfBase64 = doc.output("datauristring");  // Base64 encoded PDF
+
+// Send to Android via interface
+if (window.AndroidBridge && window.AndroidBridge.savePdfFromBase64) {
+  window.AndroidBridge.savePdfFromBase64(pdfBase64);
+} else {
+  alert("PDF download not supported in this environment");
+}
+
+
+</script>
